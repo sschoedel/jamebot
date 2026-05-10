@@ -1,0 +1,18 @@
+{
+    "url": "https://cad.onshape.com/documents/e7f4e3f1d5df0bd60aa67d40/w/d61673394b14cd7c8b93749f/e/def463a4e1c545cd828b6087",
+    "output_format": "mujoco",
+    "output_filename": "jamebot",
+    "robot_name": "jamebot",
+    "freejoint": true,
+    "joint_properties": {
+        "default": {
+            "actuated": true,
+            "type": "motor"
+        },
+        "spring": {
+            "actuated": false,
+            "stiffness": 100,
+            "damping": 1
+        }
+    }
+}

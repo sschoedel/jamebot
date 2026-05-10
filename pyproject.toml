@@ -4,4 +4,11 @@ version = "0.1.0"
 description = "Add your description here"
 readme = "README.md"
 requires-python = ">=3.14"
-dependencies = []
+dependencies = [
+    "coacd>=1.0.11",
+    "mujoco==3.8.0",
+    "onshape-to-robot>=1.8.2",
+    "scipy>=1.17.1",
+    "trimesh>=4.12.2",
+    "usd-core>=26.5",
+]

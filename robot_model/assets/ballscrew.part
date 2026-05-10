@@ -1,0 +1,13 @@
+{
+    "configuration": "default",
+    "documentId": "e7f4e3f1d5df0bd60aa67d40",
+    "documentMicroversion": "84d12634238b86dd1744404e",
+    "elementId": "de7ba05dbe4711bc2c44b69a",
+    "fullConfiguration": "default",
+    "id": "M7ln7XU4qws9P5fCu",
+    "isStandardContent": false,
+    "name": "ballscrew <1>",
+    "partId": "JJD",
+    "suppressed": false,
+    "type": "Part"
+}
