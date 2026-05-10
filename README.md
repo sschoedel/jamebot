@@ -33,6 +33,7 @@ Controls:
 - `G`: show or hide actuator force/position plots.
 - `V`: toggle vertical-only root mode; root x/y and orientation are frozen.
 - `T`: toggle foot-pinned mode; the foot pivots on a fixed ground point.
+- `J`: apply a small perturbation to the robot; an arrow briefly shows the direction.
 - `Space`: pause or resume simulation.
 - `3`: show or hide collision meshes.
 - `Esc`: close the window.
