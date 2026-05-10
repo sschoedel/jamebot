@@ -21,6 +21,18 @@ PLOT_MAX_POINTS = 600
 FORCE_PLOT_LIMIT_PADDING = 2.0
 LINEAR_POSITION_PLOT_RANGE = (0.0, 0.1)
 BALLSCREW_EQUILIBRIUM_POSITION = 0.05
+KEYBOARD_PERTURBATION_DELTA_V = 0.03
+KEYBOARD_PERTURBATION_ARROW_SECONDS = 0.45
+KEYBOARD_PERTURBATION_ARROW_LENGTH = 0.16
+KEYBOARD_PERTURBATION_ARROW_HEIGHT = 0.12
+KEYBOARD_PERTURBATION_ARROW_WIDTH = 0.008
+KEYBOARD_PERTURBATION_ARROW_RGBA = np.array([1.0, 0.35, 0.0, 0.9], dtype=np.float32)
+KEYBOARD_PERTURBATION_DIRECTIONS = (
+    np.array([1.0, 0.0], dtype=np.float64),
+    np.array([0.0, 1.0], dtype=np.float64),
+    np.array([-1.0, 0.0], dtype=np.float64),
+    np.array([0.0, -1.0], dtype=np.float64),
+)
 STANDARD_VIS_FLAG_KEYS = {
     glfw.KEY_C: ("contact points", mujoco.mjtVisFlag.mjVIS_CONTACTPOINT),
     glfw.KEY_F: ("contact forces", mujoco.mjtVisFlag.mjVIS_CONTACTFORCE),
@@ -216,6 +228,19 @@ def rotate_xy_world_to_yaw_frame(quat: np.ndarray, vector: np.ndarray) -> np.nda
         [
             cos_yaw * vector[0] + sin_yaw * vector[1],
             -sin_yaw * vector[0] + cos_yaw * vector[1],
+        ],
+        dtype=np.float64,
+    )
+
+
+def rotate_xy_yaw_frame_to_world(quat: np.ndarray, vector: np.ndarray) -> np.ndarray:
+    yaw = quat_yaw(quat)
+    cos_yaw = np.cos(yaw)
+    sin_yaw = np.sin(yaw)
+    return np.array(
+        [
+            cos_yaw * vector[0] - sin_yaw * vector[1],
+            sin_yaw * vector[0] + cos_yaw * vector[1],
         ],
         dtype=np.float64,
     )
@@ -1239,6 +1264,13 @@ class Viewer:
         self.force_plot = ActuatorForcePlot(model, args.force_plot_window, plot_reference) if args.force_plot else None
         self.force_plot_enabled = self.force_plot is not None
         self.runtime_constraint = RuntimeConstraint(model)
+        self.free_qadr = first_freejoint_qadr(model)
+        self.free_dofadr = first_freejoint_dofadr(model)
+        self.base_body_id, _ = base_and_foot_body_ids(model)
+        self.keyboard_perturbation_count = 0
+        self.keyboard_perturbation_arrow_until = 0.0
+        self.keyboard_perturbation_arrow_start = np.zeros(3, dtype=np.float64)
+        self.keyboard_perturbation_arrow_end = np.zeros(3, dtype=np.float64)
 
         if not glfw.init():
             raise RuntimeError("Could not initialize GLFW.")
@@ -1418,6 +1450,64 @@ class Viewer:
         if self.perturb.active:
             mujoco.mjv_applyPerturbForce(self.model, self.data, self.perturb)
 
+    def keyboard_perturbation_origin(self) -> np.ndarray:
+        if self.base_body_id is not None:
+            origin = self.data.xpos[self.base_body_id].copy()
+        elif self.free_qadr is not None:
+            origin = self.data.qpos[self.free_qadr : self.free_qadr + 3].copy()
+        else:
+            origin = np.zeros(3, dtype=np.float64)
+        origin[2] += KEYBOARD_PERTURBATION_ARROW_HEIGHT
+        return origin
+
+    def draw_keyboard_perturbation_arrow(self) -> None:
+        if time.perf_counter() > self.keyboard_perturbation_arrow_until:
+            return
+        if self.scene.ngeom >= self.scene.maxgeom:
+            return
+
+        geom = self.scene.geoms[self.scene.ngeom]
+        mujoco.mjv_initGeom(
+            geom,
+            mujoco.mjtGeom.mjGEOM_ARROW,
+            np.zeros(3, dtype=np.float64),
+            np.zeros(3, dtype=np.float64),
+            np.eye(3, dtype=np.float64).reshape(9),
+            KEYBOARD_PERTURBATION_ARROW_RGBA,
+        )
+        mujoco.mjv_connector(
+            geom,
+            mujoco.mjtGeom.mjGEOM_ARROW,
+            KEYBOARD_PERTURBATION_ARROW_WIDTH,
+            self.keyboard_perturbation_arrow_start,
+            self.keyboard_perturbation_arrow_end,
+        )
+        geom.category = int(mujoco.mjtCatBit.mjCAT_DECOR)
+        self.scene.ngeom += 1
+
+    def apply_keyboard_perturbation(self) -> None:
+        if self.free_qadr is None or self.free_dofadr is None:
+            print("keyboard perturbation unavailable: no freejoint")
+            return
+
+        direction = KEYBOARD_PERTURBATION_DIRECTIONS[
+            self.keyboard_perturbation_count % len(KEYBOARD_PERTURBATION_DIRECTIONS)
+        ]
+        self.keyboard_perturbation_count += 1
+        world_delta = rotate_xy_yaw_frame_to_world(self.data.qpos[self.free_qadr + 3 : self.free_qadr + 7], direction)
+        self.data.qvel[self.free_dofadr : self.free_dofadr + 2] += KEYBOARD_PERTURBATION_DELTA_V * world_delta
+        mujoco.mj_forward(self.model, self.data)
+        arrow_start = self.keyboard_perturbation_origin()
+        arrow_direction = np.array([world_delta[0], world_delta[1], 0.0], dtype=np.float64)
+        self.keyboard_perturbation_arrow_start[:] = arrow_start
+        self.keyboard_perturbation_arrow_end[:] = arrow_start + KEYBOARD_PERTURBATION_ARROW_LENGTH * arrow_direction
+        self.keyboard_perturbation_arrow_until = time.perf_counter() + KEYBOARD_PERTURBATION_ARROW_SECONDS
+        print(
+            "applied perturbation "
+            f"delta_v={KEYBOARD_PERTURBATION_DELTA_V:.3f} m/s "
+            f"world_xy=({world_delta[0]:.3f}, {world_delta[1]:.3f})"
+        )
+
     def on_key(self, window, key: int, _scancode: int, action: int, _mods: int) -> None:
         if action != glfw.PRESS:
             return
@@ -1440,6 +1530,8 @@ class Viewer:
             self.runtime_constraint.toggle_vertical(self.data)
         elif key == glfw.KEY_T:
             self.runtime_constraint.toggle_foot_pin(self.data)
+        elif key == glfw.KEY_J:
+            self.apply_keyboard_perturbation()
         elif key in (glfw.KEY_3, glfw.KEY_KP_3):
             self.toggle_collision_meshes()
         elif key in STANDARD_VIS_FLAG_KEYS:
@@ -1505,6 +1597,7 @@ class Viewer:
         viewport = mujoco.MjrRect(0, 0, width, height)
         self.apply_perturb_force()
         self.update_scene()
+        self.draw_keyboard_perturbation_arrow()
         mujoco.mjr_render(viewport, self.scene, self.context)
         mujoco.mjr_overlay(
             mujoco.mjtFont.mjFONT_NORMAL.value,
@@ -1516,6 +1609,7 @@ class Viewer:
                 "G: actuator plots\n"
                 "V: vertical-only root\n"
                 "T: foot-pinned pivot\n"
+                "J: perturb robot\n"
                 "3: collision meshes\n"
                 "C: contact points\n"
                 "F: contact forces\n"
@@ -1596,7 +1690,7 @@ def main() -> None:
     print(
         "press R to reset, B to toggle balance, G to toggle actuator plots, "
         "V for vertical-only root, T for foot-pinned pivot, 3 to toggle collision meshes, "
-        "C for contact points, F for contact forces, P to split contact forces, "
+        "J for robot perturbation, C for contact points, F for contact forces, P to split contact forces, "
         "Space to pause, Esc to quit"
     )
 
