@@ -23,33 +23,37 @@ PATTERN="${1:-*}"
 
 mkdir -p "$LOCAL_DIR"
 
-# Enumerate matching run dirs on the remote (bash 3.2-compatible).
+# Enumerate run dirs that *actually contain mp4s* under videos/train.
+# One SSH call instead of one-per-run, and we skip the rsync entirely
+# for runs that haven't recorded a video yet (saves a few seconds per
+# empty run and silences the "No such file or directory" spam).
 runs=()
 while IFS= read -r line; do
     [[ -n "$line" ]] && runs+=("$line")
 done < <(
-    ssh "$REMOTE" "cd '$REMOTE_LOG_DIR' 2>/dev/null && ls -1d $PATTERN/ 2>/dev/null" \
-        | sed 's:/$::'
+    ssh "$REMOTE" "cd '$REMOTE_LOG_DIR' 2>/dev/null || exit 0; \
+        for d in $PATTERN/; do \
+            [ -d \"\$d/videos/train\" ] || continue; \
+            set -- \"\$d/videos/train/\"*.mp4; \
+            [ -e \"\$1\" ] && echo \"\${d%/}\"; \
+        done"
 )
 
 if [[ ${#runs[@]} -eq 0 ]]; then
-    echo "No runs matching '$PATTERN' under $REMOTE:$REMOTE_LOG_DIR"
+    echo "No runs matching '$PATTERN' with videos under $REMOTE:$REMOTE_LOG_DIR"
     exit 0
 fi
 
-echo "Found ${#runs[@]} run(s) on $REMOTE."
+echo "Found ${#runs[@]} run(s) with videos on $REMOTE."
 for run in "${runs[@]}"; do
     src="$REMOTE:$REMOTE_LOG_DIR/$run/videos/train/"
     dst="$LOCAL_DIR/$run/"
     echo "==> $run"
     mkdir -p "$dst"
-    # --progress (not --info=progress2) for compatibility with macOS's
-    # stock rsync 2.6.9. Errors aren't suppressed — if a run has no videos
-    # yet you'll see rsync's "No such file or directory" and the loop
-    # continues.
+    # --progress (not --info=progress2) for macOS's stock rsync 2.6.9.
     rsync -avh --partial --progress \
         --include="*.mp4" --exclude="*" \
-        "$src" "$dst" || echo "    (skipped: rsync exit $?)"
+        "$src" "$dst" || echo "    (rsync exit $?)"
 done
 
 echo
