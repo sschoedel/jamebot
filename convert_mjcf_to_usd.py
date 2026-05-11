@@ -29,21 +29,29 @@ from isaaclab.sim.converters import MjcfConverter, MjcfConverterCfg
 
 
 def _strip_world_body_articulation_root(usd_path: str) -> None:
-    """Remove the spurious ArticulationRootAPI from ``worldBody``.
+    """Drop the leftover ``worldBody`` prim from the MJCF import.
 
-    The MJCF importer marks both the world parent and the actual robot root
-    body as articulation roots; PhysX then refuses to load. We keep only the
-    one on the real robot body.
+    The MJCF importer leaves an empty ``worldBody`` Xform under the asset
+    root and also marks it as an ArticulationRoot. We remove both the API
+    and the prim itself: PhysX rejects the dual ArticulationRoot, and the
+    extra prim confuses IsaacLab's USD↔Fabric sync for env_0 (the source
+    prim), causing video recordings of env_0 to render the initial pose
+    forever while Fabric-cloned envs update normally.
     """
     from pxr import Usd, UsdPhysics
 
     stage = Usd.Stage.Open(usd_path)
     changed = False
     for prim in stage.Traverse():
-        if prim.GetName() == "worldBody" and prim.HasAPI(UsdPhysics.ArticulationRootAPI):
-            prim.RemoveAPI(UsdPhysics.ArticulationRootAPI)
-            print(f"[fixup] removed ArticulationRootAPI from {prim.GetPath()}")
-            changed = True
+        if prim.GetName() == "worldBody":
+            if prim.HasAPI(UsdPhysics.ArticulationRootAPI):
+                prim.RemoveAPI(UsdPhysics.ArticulationRootAPI)
+                print(f"[fixup] removed ArticulationRootAPI from {prim.GetPath()}")
+                changed = True
+            if prim.IsActive():
+                prim.SetActive(False)
+                print(f"[fixup] deactivated prim {prim.GetPath()}")
+                changed = True
     if changed:
         stage.GetRootLayer().Save()
 
