@@ -71,8 +71,8 @@
     <material name="foot_material" rgba="0.647059 0.647059 0.647059 1"/>
   </asset>
   <actuator>
-    <motor class="jamebot" name="flywheelY" joint="flywheelY" ctrlrange="-10 10" forcerange="-200 200"/>
-    <motor class="jamebot" name="flywheelX" joint="flywheelX" ctrlrange="-10 10" forcerange="-200 200"/>
+    <motor class="jamebot" name="flywheelY" joint="flywheelY" ctrlrange="-200 200" forcerange="-200 200"/>
+    <motor class="jamebot" name="flywheelX" joint="flywheelX" ctrlrange="-200 200" forcerange="-200 200"/>
     <motor class="jamebot" name="ballscrew" joint="ballscrew" ctrlrange="-10 10" forcerange="-10 10"/>
   </actuator>
   <equality/>
