@@ -23,7 +23,6 @@ Action interface:
 from __future__ import annotations
 
 import math
-import os
 from typing import TYPE_CHECKING
 
 import torch
@@ -32,6 +31,7 @@ from mjlab.entity import Entity
 from mjlab.envs import ManagerBasedRlEnvCfg
 from mjlab.envs.mdp import (
   action_rate_l2,
+  apply_body_impulse,
   base_ang_vel,
   base_lin_vel,
   bad_orientation,
@@ -43,7 +43,6 @@ from mjlab.envs.mdp import (
   joint_vel_rel,
   last_action,
   projected_gravity,
-  push_by_setting_velocity,
   reset_joints_by_offset,
   reset_root_state_uniform,
   time_out,
@@ -223,18 +222,23 @@ def _make_env_cfg() -> ManagerBasedRlEnvCfg:
         ),
       },
     ),
-    # Random horizontal pushes via instantaneous velocity perturbations on the
-    # floating base. Matches the IsaacLab push protocol (1-3 s interval,
-    # ~0.3-1.5 N impulses on a 0.27 kg body -> ~0.01-0.05 m/s velocity change).
+    # Random pushes as sustained world-frame forces on the body link.
+    # apply_body_impulse holds a sampled wrench in xfrc_applied for
+    # duration_s, then clears and waits cooldown_s before the next trigger.
+    # Force samples are uniform per component in force_range; +/-0.5 N peak
+    # gives a ~0.18 m/s velocity bump over 100 ms on a 0.27 kg body, which
+    # matches the prior velocity-impulse magnitude. Vertical component is
+    # well under gravity (2.65 N) so it modulates normal force without
+    # lifting the foot off the ground.
     "push_robot": EventTermCfg(
-      func=push_by_setting_velocity,
-      mode="interval",
-      interval_range_s=(1.0, 3.0),
+      func=apply_body_impulse,
+      mode="step",
       params={
-        "velocity_range": {
-          "x": (-0.05, 0.05),
-          "y": (-0.05, 0.05),
-        },
+        "force_range": (-1.0, 1.0),
+        "torque_range": (-0.5, 0.5),
+        "duration_s": (0.1, 0.5),
+        "cooldown_s": (1.0, 3.0),
+        "asset_cfg": SceneEntityCfg("robot", body_names=("body",)),
       },
     ),
   }
@@ -313,8 +317,8 @@ def jamebot_balance_env_cfg(play: bool = False) -> ManagerBasedRlEnvCfg:
     cfg.episode_length_s = 1e10
     cfg.observations["actor"].enable_corruption = False
     cfg.scene.num_envs = 1
-    # Pushes are off by default in play mode. The play wrapper sets
-    # JAMEBOT_PLAY_PERTURBATIONS=1 when --enable-perturbations is passed.
-    if os.environ.get("JAMEBOT_PLAY_PERTURBATIONS", "0") != "1":
-      cfg.events.pop("push_robot", None)
+    # push_robot stays in the events dict; the play wrapper strips it
+    # post-registration unless --enable-perturbations is set. Doing it here
+    # is too early -- the registry stores this cfg instance at jamebot_mjlab
+    # import time, before sys.argv has been parsed.
   return cfg
