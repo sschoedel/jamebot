@@ -1,0 +1,65 @@
+<?xml version="1.0" ?>
+<!-- jamebot v1.1: v1 geometry + inertias, but the <actuator> block is removed.
+     mjlab adds all actuators programmatically via jamebot_constants.py:
+       - ballscrew  -> BuiltinPositionActuatorCfg (linear actuator, PD-controlled)
+       - flywheelX  -> BuiltinMotorActuatorCfg    (reaction wheel, torque)
+       - flywheelY  -> BuiltinMotorActuatorCfg    (reaction wheel, torque)
+     Do not add an <actuator> block here; mjlab would duplicate. For the LQR
+     baseline (main.py), keep using jamebot_v1.xml. -->
+<mujoco model="jamebot">
+  <compiler angle="radian" meshdir="assets" autolimits="true"/>
+  <default>
+    <default class="jamebot">
+      <joint frictionloss="0.001" armature="1e-05"/>
+      <default class="visual">
+        <geom type="mesh" contype="0" conaffinity="0" group="2"/>
+      </default>
+      <default class="collision">
+        <geom group="3"/>
+      </default>
+    </default>
+  </default>
+  <worldbody>
+    <body name="body" pos="0 0 0" quat="1 0 0 0" childclass="jamebot">
+      <freejoint name="body_freejoint"/>
+      <inertial pos="0.00233397 0.00233397 0.130402" mass="0.269808" fullinertia="0.000113405 0.000113405 9.14441e-05 1.46976e-06 -5.64092e-06 -5.64092e-06"/>
+      <geom type="mesh" class="visual" pos="0 0 0.00131911" quat="1 0 0 0" mesh="body" material="body_material"/>
+      <geom type="mesh" class="collision" pos="0 0 0.00131911" quat="1 0 0 0" mesh="body" material="body_material"/>
+      <body name="flywheel_1" pos="0 -0.0225 0.13936" quat="0.0657566 -0.0657566 -0.704043 -0.704043">
+        <joint axis="0 0 1" name="flywheelY" type="hinge"/>
+        <inertial pos="-0 0 -0.0029485" mass="0.0247451" fullinertia="3.08285e-06 3.08285e-06 6.01906e-06 0 0 0"/>
+        <geom type="mesh" class="visual" pos="-0 0.138041 0.0225" quat="0.707107 0.707107 -0 0" mesh="flywheel_1" material="flywheel_1_material"/>
+        <geom type="mesh" class="collision" pos="-0 0.138041 0.0225" quat="0.707107 0.707107 -0 0" mesh="flywheel_1" material="flywheel_1_material"/>
+      </body>
+      <body name="flywheel_2" pos="-0.0225 0 0.13936" quat="0.5 0.5 0.5 0.5">
+        <joint axis="0 0 1" name="flywheelX" type="hinge"/>
+        <inertial pos="0 0 -0.0029485" mass="0.0247451" fullinertia="3.08285e-06 3.08285e-06 6.01906e-06 0 0 0"/>
+        <geom type="mesh" class="visual" pos="0 -0.138041 0.0225" quat="0.5 -0.5 -0.5 -0.5" mesh="flywheel_2" material="flywheel_2_material"/>
+        <geom type="mesh" class="collision" pos="0 -0.138041 0.0225" quat="0.5 -0.5 -0.5 -0.5" mesh="flywheel_2" material="flywheel_2_material"/>
+      </body>
+      <body name="ballscrew" pos="0 0 0.15" quat="1 0 0 0">
+        <joint axis="0 0 -1" name="ballscrew" type="slide" range="0 0.1"/>
+        <inertial pos="0 0 -0.0405413" mass="0.0361023" fullinertia="2.41068e-05 2.41068e-05 2.42338e-06 0 0 0"/>
+        <geom type="mesh" class="visual" pos="0 0 -0.0934308" quat="1 0 0 0" mesh="ballscrew" material="ballscrew_material"/>
+        <geom type="mesh" class="collision" pos="0 0 -0.0934308" quat="1 0 0 0" mesh="ballscrew" material="ballscrew_material"/>
+        <body name="foot" pos="0 0 -0.0527929" quat="1 0 0 0">
+          <inertial pos="0 -0 -0.0229776" mass="0.0167885" fullinertia="2.02489e-06 2.02489e-06 6.77059e-07 0 0 0"/>
+          <geom type="mesh" class="visual" pos="0 0 -0.0376424" quat="1 0 0 0" mesh="foot" material="foot_material"/>
+          <geom name="foot_collision" type="mesh" class="collision" pos="0 0 -0.0376424" quat="1 0 0 0" mesh="foot" condim="4" friction="1.0 0.02 0.0001"/>
+        </body>
+      </body>
+    </body>
+  </worldbody>
+  <asset>
+    <mesh file="body.stl"/>
+    <mesh file="foot.stl"/>
+    <mesh file="flywheel_2.stl"/>
+    <mesh file="ballscrew.stl"/>
+    <mesh file="flywheel_1.stl"/>
+    <material name="body_material" rgba="0.231373 0.380392 0.705882 1"/>
+    <material name="flywheel_1_material" rgba="0.917647 0.917647 0.917647 1"/>
+    <material name="flywheel_2_material" rgba="0.917647 0.917647 0.917647 1"/>
+    <material name="ballscrew_material" rgba="0.615686 0.811765 0.929412 1"/>
+    <material name="foot_material" rgba="0.647059 0.647059 0.647059 1"/>
+  </asset>
+</mujoco>
