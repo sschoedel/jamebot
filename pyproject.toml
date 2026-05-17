@@ -1,14 +1,36 @@
 [project]
-name = "jumpybot"
+name = "jamebot"
 version = "0.1.0"
-description = "Add your description here"
+description = "Jamebot reaction-wheel pogo-stick robot: MuJoCo LQR baseline + mjlab RL training."
 readme = "README.md"
-requires-python = ">=3.14"
+# mjlab pins <3.14 (torch 2.7 / mujoco-warp / warp-lang compatibility).
+requires-python = ">=3.13,<3.14"
 dependencies = [
+    # MuJoCo LQR baseline + tools (existing).
     "coacd>=1.0.11",
     "mujoco==3.8.0",
     "onshape-to-robot>=1.8.2",
     "scipy>=1.17.1",
     "trimesh>=4.12.2",
     "usd-core>=26.5",
+    # mjlab RL stack.
+    "mjlab>=0.1.0",
+    # mjlab 1.3.0 uses the pre-1.13 warp API (wp.context.runtime.driver_version);
+    # warp-lang 1.13 removed it. The fix is in mjlab main but unreleased.
+    # Remove this pin once mjlab >1.3.0 is on PyPI.
+    "warp-lang<1.13",
 ]
+
+[project.scripts]
+# Wrappers that import jamebot_mjlab (to register tasks) then delegate to
+# the mjlab CLI entrypoints. Use these instead of `uv run train` directly,
+# otherwise mjlab won't know about Mjlab-Jamebot-Balance-v0.
+jamebot-train = "jamebot_mjlab.scripts.train:main"
+jamebot-play = "jamebot_mjlab.scripts.play:main"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/jamebot_mjlab"]
