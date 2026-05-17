@@ -25,6 +25,7 @@ This patch is opt-in: only installed when the play wrapper sees the
 from __future__ import annotations
 
 import copy
+import io
 from typing import TYPE_CHECKING, Any
 
 import torch
@@ -38,6 +39,17 @@ if TYPE_CHECKING:
   pass
 
 _PATCH_FLAG = "_jamebot_quant_patch_applied"
+
+
+def _model_size_bytes(model: torch.nn.Module) -> int:
+  """Return the on-disk size of ``model``'s state in bytes."""
+  buf = io.BytesIO()
+  torch.save(model.state_dict(), buf)
+  return buf.tell()
+
+
+def _param_count(model: torch.nn.Module) -> int:
+  return sum(p.numel() for p in model.parameters())
 
 
 def quantize_actor_int8(actor: torch.nn.Module) -> torch.nn.Module:
@@ -101,8 +113,16 @@ def _install_patch() -> None:
     self: MjlabOnPolicyRunner, device: str | None = None
   ) -> SwitchablePolicy:
     fp32_policy = original_get_inference_policy(self, device=device)
-    int8_policy = quantize_actor_int8(fp32_policy)
     target_device = device if device is not None else self.device
+    print(
+      f"[jamebot quant] fp32 actor: {_param_count(fp32_policy):,} params, "
+      f"{_model_size_bytes(fp32_policy) / 1024:.1f} KB on {target_device}"
+    )
+    int8_policy = quantize_actor_int8(fp32_policy)
+    print(
+      f"[jamebot quant] int8 actor: {_param_count(int8_policy):,} params, "
+      f"{_model_size_bytes(int8_policy) / 1024:.1f} KB on cpu (loaded)"
+    )
     return SwitchablePolicy(fp32_policy, int8_policy, target_device)
 
   def patched_setup(self: ViserPlayViewer) -> None:
@@ -119,6 +139,8 @@ def _install_patch() -> None:
       @cb.on_update
       def _(_) -> None:
         policy.use_int8 = cb.value
+        active = "INT8 (cpu)" if cb.value else "fp32 (cuda)"
+        print(f"[jamebot quant] active actor switched to {active}")
 
   MjlabOnPolicyRunner.get_inference_policy = patched_get_inference_policy  # type: ignore[method-assign]
   ViserPlayViewer.setup = patched_setup  # type: ignore[method-assign]
